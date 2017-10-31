@@ -1,4 +1,5 @@
 import re
+import logging
 
 from coalib.bearlib import deprecate_settings
 from coalib.bears.LocalBear import LocalBear
@@ -10,16 +11,16 @@ from bears.general.AnnotationBear import AnnotationBear
 
 
 def _get_comments(dependency_results):
-    if not dependency_results:
-        return
-
     annotation_bear_results = dependency_results.get('AnnotationBear')
     if (not annotation_bear_results or
             not isinstance(annotation_bear_results, list)):
         return
 
     for result in annotation_bear_results:
-        yield from result.contents.get('comments', [])
+        if isinstance(result.contents, str):
+            logging.error(result.contents)
+        else:
+            yield from result.contents.get('comments', [])
 
 
 def generate_diff(comments, file, filename,
@@ -81,7 +82,7 @@ class KeywordBear(LocalBear):
             keywords: list=['todo', 'fixme'],
             regex_keyword: str='',
             dependency_results: dict=None):
-        '''
+        """
         Checks the code files for given keywords.
 
         :param keywords:
@@ -89,16 +90,17 @@ class KeywordBear(LocalBear):
             Default are TODO and FIXME.
         :param regex_keyword:
             A regular expression to search for matching keywords in a file.
-        '''
-        comments = _get_comments(dependency_results)
+        """
+        comments = list(_get_comments(dependency_results))
 
-        simple_keywords_regex = re.compile(
-            '(' + '|'.join(re.escape(key) for key in keywords) + ')',
-            re.IGNORECASE)
+        if keywords:
+            simple_keywords_regex = re.compile(
+                '(' + '|'.join(re.escape(key) for key in keywords) + ')',
+                re.IGNORECASE)
 
-        message = "The line contains the keyword '{}'."
-        yield from self.check_keywords(filename, file, comments,
-                                       simple_keywords_regex, message)
+            message = "The line contains the keyword '{}'."
+            yield from self.check_keywords(filename, file, comments,
+                                           simple_keywords_regex, message)
 
         if regex_keyword is not '':
             regex = re.compile(regex_keyword)
@@ -113,17 +115,17 @@ class KeywordBear(LocalBear):
                        comments,
                        regex,
                        message):
-        '''
+        """
         Checks for the presence of keywords according to regex in a given file.
 
         :param regex:
-           A regular expression which is used to search matching
-           keywords in a file.
+            A regular expression which is used to search matching
+            keywords in a file.
         :param message:
-           A message to be displayed to the user when a keyword in a given file
-           results in a match. It may have an unnamed placeholder for the
-           keyword.
-        '''
+            A message to be displayed to the user when a keyword in a given
+            file results in a match. It may have an unnamed placeholder for the
+            keyword.
+        """
 
         for line_number, line in enumerate(file, start=1):
             for keyword in regex.finditer(line):

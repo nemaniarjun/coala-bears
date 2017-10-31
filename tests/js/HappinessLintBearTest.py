@@ -4,7 +4,7 @@ from coalib.testing.LocalBearTestHelper import verify_local_bear
 
 good_file = """
 var x = 2;
-if (6 > 7 !== true) console.log('done');
+if (x > 7) console.log('done');
 console.log(x);
 """
 
@@ -14,6 +14,6 @@ if (options.quiet !== true)
 var x=2
 """
 
-HappinessLintBear = verify_local_bear(HappinessLintBear,
-                                      valid_files=(good_file,),
-                                      invalid_files=(bad_file,))
+HappinessLintBearTest = verify_local_bear(HappinessLintBear,
+                                          valid_files=(good_file,),
+                                          invalid_files=(bad_file,))

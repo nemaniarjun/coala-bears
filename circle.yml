@@ -1,6 +1,6 @@
 dependencies:
   cache_directories:
-    - ~/.apt-cache
+    - docs/_build
     - ~/.pyenv/versions/3.4.3
     - ~/.pyenv/versions/3.5.1
     - ~/coala-bears/node_modules
@@ -9,6 +9,8 @@ dependencies:
     - ~/.RLibrary
     - ~/dart-sdk/bin
     - ~/.cabal
+    - ~/.ghc
+    - ~/.ghc-mod
     - ~/infer-linux64-v0.7.0
     - ~/nltk_data
     - ~/pmd-bin-5.4.1
@@ -17,7 +19,9 @@ dependencies:
     - ~/.julia
     - ~/.local/tailor/
   pre:
-    - sudo rm -rf /var/cache/apt/archives && sudo ln -s ~/.apt-cache /var/cache/apt/archives && mkdir -p ~/.apt-cache/partial
+    - sudo rm -rf /var/cache/apt/archives
+    - sudo ln -s ~/.apt-cache /var/cache/apt/archives
+    - mkdir -p ~/.apt-cache/partial
     - echo 'export PATH=$PATH:~/coala-bears/node_modules/.bin' >> ~/.circlerc
     - echo 'export PATH=$PATH:~/coala-bears/vendor/bin' >> ~/.circlerc
     - echo 'export LINTR_COMMENT_BOT=false' >> ~/.circlerc
@@ -27,16 +31,26 @@ dependencies:
     - echo 'export PATH=$PATH:~/pmd-bin-5.4.1/bin' >> ~/.circlerc
     - echo 'export PATH=$PATH:~/bakalint-0.4.0' >> ~/.circlerc
     - echo 'export PATH=$PATH:~/.local/tailor/tailor-latest/bin' >> ~/.circlerc
+    - echo 'export PATH=$PATH:~/elm-format-0.18' >> ~/.circlerc
+    - echo 'export PATH=$PATH:~/phpmd' >> ~/.circlerc
     - echo 'export R_LIB_USER=~/.RLibrary' >> ~/.circlerc
     - sed -i '/source \/home\/ubuntu\/virtualenvs\//d' ~/.circlerc
     - mkdir -p ~/.RLibrary
     - nvm alias default node
   override:
-    - bash .ci/deps.shellcheck.sh
+    - bash .ci/deps.apt.sh
+    - bash .ci/deps.pip.sh
+    - bash .ci/deps.java.sh
+    - bash .ci/deps.opam.sh
+    - bash .ci/deps.r.sh
+    - bash .ci/deps.cabal.sh
     - bash .ci/deps.sh:
         timeout: 900  # Allow 15 mins before timing out due to "no output"
+    - bash .ci/deps.coala-bears.sh
 
 machine:
+  node:
+    version: 6.10.2
   java:
     version: oraclejdk8
 
@@ -50,8 +64,19 @@ test:
         parallel: true
     - coala-ci -L DEBUG:
         parallel: true
-    - bash .ci/deploy.coverage.sh:
+    - codecov:
         parallel: true
-    - rm -rf docs/API && make -C docs clean
-    - python setup.py docs:
+    # sphinx fails with python 3.5.1 due to an issue in typing package,
+    # and node 1 has python 3.4.3
+    - ? |
+          if [ $CIRCLE_NODE_INDEX == 1 ] ; then
+            pip install -r docs-requirements.txt
+          fi
+      :
+        parallel: true
+    - ? |
+          if [ $CIRCLE_NODE_INDEX == 1 ] ; then
+            python setup.py docs
+          fi
+      :
         parallel: true

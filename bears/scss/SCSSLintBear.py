@@ -6,7 +6,8 @@ from dependency_management.requirements.PipRequirement import PipRequirement
 
 
 @linter(executable='scss-lint', output_format='regex',
-        output_regex=r'.+:(?P<line>\d+)\s+\[(?P<severity>.)\]\s*'
+        output_regex=r'.+:(?P<line>\d+):(?P<column>\d+)\s+'
+                     r'\[(?P<severity>.)\]\s+'
                      r'(?P<message>.*)')
 class SCSSLintBear:
     """
@@ -16,7 +17,9 @@ class SCSSLintBear:
     """
 
     LANGUAGES = {'SCSS'}
-    REQUIREMENTS = {GemRequirement('scss-lint', '', 'false'),
+    # require flag is necessary for 'scss_lint'
+    # https://github.com/brigade/scss-lint#installation
+    REQUIREMENTS = {GemRequirement('scss_lint', '', 'false'),
                     PipRequirement('pyyaml', '3.12')}
     AUTHORS = {'The coala developers'}
     AUTHORS_EMAILS = {'coala-devel@googlegroups.com'}
@@ -112,7 +115,7 @@ class SCSSLintBear:
             Ensure hexadecimal colors are valid (either three or six digits).
         :param allow_id_selector:
             Allows using ID selectors.
-        :param allow_important_rule_in_property:
+        :param allow_important_rule_in_properties:
             Allows using ``!important`` in properties.
         :param use_spaces:
             Use spaces for indentation (tabs otherwise).

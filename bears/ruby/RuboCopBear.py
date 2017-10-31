@@ -19,7 +19,7 @@ class RuboCopBear:
     """
 
     LANGUAGES = {'Ruby'}
-    REQUIREMENTS = {GemRequirement('rubocop'),
+    REQUIREMENTS = {GemRequirement('rubocop', '0.49.1'),
                     PipRequirement('pyyaml', '3.12')}
     AUTHORS = {'The coala developers'}
     AUTHORS_EMAILS = {'coala-devel@googlegroups.com'}
@@ -36,7 +36,7 @@ class RuboCopBear:
     def create_arguments(filename, file, config_file, rubocop_config: str=''):
         # Need both stdin and filename. Explained in this comment:
         # https://github.com/bbatsov/rubocop/pull/2146#issuecomment-131403694
-        args = (filename, '--stdin', '--format=json')
+        args = ('--stdin', filename, '--format=json')
         if rubocop_config:
             args += ('--config', rubocop_config)
         else:
@@ -81,7 +81,8 @@ class RuboCopBear:
                         ignore_unused_block_args_if_empty: bool=True,
                         allow_unused_block_keyword_arguments: bool=False,
                         ignore_unused_method_args_if_empty: bool=True,
-                        allow_unused_method_keyword_args: bool=False):
+                        allow_unused_method_keyword_args: bool=False,
+                        rubocop_config: str=''):
         """
         Not all settings added.
         Notable settings missing: Rails settings.
@@ -174,6 +175,9 @@ class RuboCopBear:
         :param allow_unused_method_keyword_args:
             Allows unused keyword arguments in a method.
         """
+        if rubocop_config:
+            return None
+
         naming_convention = {'camel': 'camelCase', 'snake': 'snake_case'}
         options = {
             'Style/AccessModifierIndentation': {

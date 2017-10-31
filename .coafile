@@ -1,6 +1,7 @@
 [Default]
 files = *.py, bears/**/*.py, tests/**/*.py, bears/*.py.in
-ignore = tests/python/test_files/pylint_test.py, tests/python/bandit_test_files/*
+ignore = tests/python/test_files/pylint_test.py, tests/python/bandit_test_files/*,
+         tests/python/vulture_test_files/*
 
 max_line_length = 79
 use_spaces = True
@@ -14,6 +15,13 @@ bears = SpaceConsistencyBear, QuotesBear
 language = python
 default_actions = *: ApplyPatchAction
 preferred_quotation = '
+
+[flakes]
+# Do not set default_action to ApplyPatchAction as it may lead to some
+# required imports being removed which might result in coala behaving weirdly.
+default_action: *: ShowPatchAction
+bears = PyUnusedCodeBear
+language = Python
 
 [autopep8]
 bears = PEP8Bear, PycodestyleBear
@@ -31,6 +39,10 @@ bears = SpaceConsistencyBear
 bears = GitCommitBear
 shortlog_trailing_period = False
 shortlog_regex = ([^:]*|[^:]+: [A-Z0-9*].*)
+body_close_issue = True
+body_close_issue_full_url = True
+body_close_issue_on_last_line = True
+body_enforce_issue_reference = False
 
 [LineCounting]
 enabled = False
@@ -54,3 +66,7 @@ cs_keywords =
 [PythonPackageInit]
 bears = PythonPackageInitBear
 ignore = *.py
+
+[yml]
+bears = YAMLLintBear
+files = *.yml, .ci/*.yml, tests/**/*.yml

@@ -95,12 +95,14 @@ class GitCommitBearTest(unittest.TestCase):
         metadata = GitCommitBear.get_metadata()
         self.assertEqual(
             metadata.name,
-            "<Merged signature of 'run', 'check_shortlog', 'check_body'>")
+            "<Merged signature of 'run', 'check_shortlog', 'check_body'"
+            ", 'check_issue_reference'>")
 
         # Test if at least one parameter of each signature is used.
         self.assertIn('allow_empty_commit_message', metadata.optional_params)
         self.assertIn('shortlog_length', metadata.optional_params)
         self.assertIn('body_line_length', metadata.optional_params)
+        self.assertIn('body_close_issue', metadata.optional_params)
 
     def test_git_failure(self):
         # In this case use a reference to a non-existing commit, so just try
@@ -267,6 +269,200 @@ class GitCommitBearTest(unittest.TestCase):
                          [])
         self.assertTrue(self.msg_queue.empty())
 
+        # body_regex, not fully matched
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix 1112')
+        self.assertEqual(self.run_uut(
+                             body_regex=r'Fix\s+[1-9][0-9]*\s*'),
+                         ['No match found in commit message for the regular '
+                          'expression provided: Fix\s+[1-9][0-9]*\s*'])
+        self.assert_no_msgs()
+
+        # Matching with regexp, fully matched
+        self.git_commit('Shortlog\n\n'
+                        'TICKER\n'
+                        'CLOSE 2017')
+        self.assertEqual(self.run_uut(
+                             body_regex=r'TICKER\s*CLOSE\s+[1-9][0-9]*'), [])
+        self.assert_no_msgs()
+
+    def test_check_issue_reference(self):
+        # Commit with no remotes configured
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Closes #01112')
+        self.assertEqual(self.run_uut(body_close_issue=True), [])
+
+        # Adding BitBucket remote for testing
+        self.run_git_command('remote', 'add', 'test',
+                             'https://bitbucket.com/user/repo.git')
+
+        # Unsupported Host - Bitbucket
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Closes #1112')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True), [])
+
+        # Adding GitHub remote for testing, ssh way :P
+        self.run_git_command('remote', 'set-url', 'test',
+                             'git@github.com:user/repo.git')
+
+        # GitHub host with an issue
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fixed https://github.com/usr/repo/issues/1112\n'
+                        'and https://github.com/usr/repo/issues/1312')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True), [])
+
+        # No keywords and no issues
+        self.git_commit('Shortlog\n\n'
+                        'This line is ok.\n'
+                        'This line is by far too long (in this case).\n'
+                        'This one too, blablablablablablablablabla.')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True,
+                             body_close_issue_on_last_line=True), [])
+        self.assert_no_msgs()
+
+        # Has keyword but no valid issue URL
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix https://github.com/user/repo.git')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True),
+                         ['Invalid full issue reference: '
+                          'https://github.com/user/repo.git'])
+        self.assert_no_msgs()
+
+        # GitHub host with short issue tag
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix #1112, #1115 and #123')
+        self.assertEqual(self.run_uut(body_close_issue=True,), [])
+
+        # GitHub host with invalid short issue tag
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix #01112 and #111')
+        self.assertEqual(self.run_uut(body_close_issue=True,),
+                         ['Invalid issue number: #01112'])
+        self.assert_no_msgs()
+
+        # GitHub host with no full issue reference
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix #1112')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True),
+                         ['Invalid full issue reference: #1112'])
+        self.assert_no_msgs()
+
+        # Invalid characters in issue number
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix #1112-3')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True),
+                         ['Invalid full issue reference: #1112-3'])
+        self.assert_no_msgs()
+
+        # Adding GitLab remote for testing
+        self.run_git_command('remote', 'set-url', 'test',
+                             'https://gitlab.com/user/repo.git')
+
+        # GitLab chosen and has an issue
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Resolve https://gitlab.com/usr/repo/issues/1112\n'
+                        'and https://gitlab.com/usr/repo/issues/1312')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True), [])
+
+        # Invalid issue number in URL
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Closing https://gitlab.com/user/repo/issues/123\n'
+                        'and https://gitlab.com/user/repo/issues/not_num')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True),
+                         ['Invalid issue number: '
+                          'https://gitlab.com/user/repo/issues/not_num'])
+        self.assert_no_msgs()
+
+        # Invalid URL
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix www.google.com/issues/hehehe')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True),
+                         ['Invalid full issue reference: '
+                          'www.google.com/issues/hehehe'])
+        self.assert_no_msgs()
+
+        # One of the short references is broken
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Resolve #11 and close #notnum')
+        self.assertEqual(self.run_uut(body_close_issue=True,),
+                         ['Invalid issue number: #notnum'])
+        self.assert_no_msgs()
+
+        # Close issues in other repos
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Resolve #11 and close github/gitter#32')
+        self.assertEqual(self.run_uut(body_close_issue=True,), [])
+        self.assert_no_msgs()
+
+        # Incorrect close issue other repo pattern
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Another line, blablablablablabla.\n'
+                        'Fix #11 and close github#32')
+        self.assertEqual(self.run_uut(body_close_issue=True,),
+                         ['Invalid issue reference: github#32'])
+        self.assert_no_msgs()
+
+        # Last line enforce full URL
+        self.git_commit('Shortlog\n\n'
+                        'First line, blablablablablabla.\n'
+                        'Fix http://gitlab.com/user/repo/issues/1112\n'
+                        'Another line, blablablablablabla.\n')
+        self.assertEqual(self.run_uut(
+                             body_close_issue=True,
+                             body_close_issue_full_url=True,
+                             body_close_issue_on_last_line=True,
+                             body_enforce_issue_reference=True),
+                         ['Body of HEAD commit does not contain any full issue'
+                          ' reference in the last line.'])
+        self.assert_no_msgs()
+
     def test_different_path(self):
         no_git_dir = mkdtemp()
         self.git_commit('Add a very long shortlog for a bad project history.')
@@ -285,3 +481,38 @@ class GitCommitBearTest(unittest.TestCase):
                          self.gitdir)
         os.chdir(self.gitdir)
         os.rmdir(no_git_dir)
+
+    def test_nltk_download_disabled(self):
+        # setUp has already initialised GitCommitBear.
+        self.assertTrue(GitCommitBear._nltk_data_downloaded)
+
+        section = Section('commit')
+        section.append(Setting('shortlog_imperative_check', 'False'))
+
+        GitCommitBear._nltk_data_downloaded = False
+        GitCommitBear(None, section, self.msg_queue)
+        self.assertFalse(GitCommitBear._nltk_data_downloaded)
+
+        # reset
+        GitCommitBear._nltk_data_downloaded = True
+
+    def test_nltk_download(self):
+        # setUp has already initialised GitCommitBear.
+        self.assertTrue(GitCommitBear._nltk_data_downloaded)
+
+        section = Section('commit')
+        section.append(Setting('shortlog_imperative_check', 'True'))
+
+        GitCommitBear._nltk_data_downloaded = False
+        GitCommitBear(None, section, self.msg_queue)
+        self.assertTrue(GitCommitBear._nltk_data_downloaded)
+
+    def test_nltk_download_default(self):
+        # setUp has already initialised GitCommitBear.
+        self.assertTrue(GitCommitBear._nltk_data_downloaded)
+
+        section = Section('commit')
+
+        GitCommitBear._nltk_data_downloaded = False
+        GitCommitBear(None, section, self.msg_queue)
+        self.assertTrue(GitCommitBear._nltk_data_downloaded)

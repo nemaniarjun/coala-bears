@@ -2,11 +2,16 @@ sudo: required
 
 language: python
 python:
-  # 2.7 is rejected by dependency mypy-lang
-  - 3.3
   - 3.4
   - 3.5
-  - 3.6-dev
+  - 3.6.1
+
+matrix:
+  include:
+    - python: 2.7
+      env: UNSUPPORTED=true
+    - python: 3.3
+      env: UNSUPPORTED=true
 
 dist: trusty
 
@@ -17,14 +22,15 @@ addons:
       - avsm  # OPAM stable
       - hvr-ghc  # Haskell
     packages:
-      - cabal-install
+      - cabal-install-1.24
       - chktex
       - clang-3.4
       - cppcheck
+      - devscripts
       - flawfinder
       - gfortran
       - ghc
-      - haskell-platform
+      - happy
       - indent
       - libblas-dev
       - liblapack-dev
@@ -41,8 +47,11 @@ addons:
 cache:
   pip: true
   directories:
+    - docs/_build
     # Installed language package caches
     - ~/.cabal
+    - ~/.ghc
+    - ~/.ghc-mod
     - ~/R/Library
     - ~/.julia
     - $TRAVIS_BUILD_DIR/node_modules
@@ -51,14 +60,14 @@ cache:
     # coala managed data
     - ~/nltk_data
     - ~/.local/share/coala-bears
-    # .deb cache
-    - ~/.apt-cache
     # Installed linters
     - ~/infer-linux64-v0.7.0
     - ~/pmd-bin-5.4.1
     - ~/bakalint-0.4.0
+    - ~/elm-format-0.18
     - ~/dart-sdk/bin
     - ~/.local/tailor/
+    - ~/phpmd
 
 env:
   global:
@@ -66,47 +75,44 @@ env:
     - USE_PPAS="marutter/rdev staticfloat/juliareleases ondrej/golang"
     - R_LIB_USER=~/R/Library
     - LINTR_COMMENT_BOT=false
-    - PATH="$PATH:$TRAVIS_BUILD_DIR/node_modules/.bin:$TRAVIS_BUILD_DIR/vendor/bin:$HOME/dart-sdk/bin:$HOME/.cabal/bin:$HOME/infer-linux64-v0.7.0/infer/bin:$HOME/pmd-bin-5.4.1/bin:$HOME/bakalint-0.4.0:$HOME/.local/tailor/tailor-latest/bin"
+    - PATH="/opt/cabal/1.24/bin:$PATH:$TRAVIS_BUILD_DIR/node_modules/.bin:$TRAVIS_BUILD_DIR/vendor/bin:$HOME/dart-sdk/bin:$HOME/.cabal/bin:$HOME/infer-linux64-v0.7.0/infer/bin:$HOME/pmd-bin-5.4.1/bin:$HOME/bakalint-0.4.0:$HOME/elm-format-0.18:$HOME/.local/tailor/tailor-latest/bin:$HOME/phpmd"
 
 before_install:
-  - export TRAVIS_PYTHON_VERSION_MAJOR=${TRAVIS_PYTHON_VERSION%.[0-9]}
-  - export TRAVIS_PYTHON_VERSION_MINOR=${TRAVIS_PYTHON_VERSION#[0-9].}
-  - >
-    if [[ $TRAVIS_PYTHON_VERSION_MINOR < 4 || $TRAVIS_PYTHON_VERSION_MAJOR == 2 ]]; then
-      UNSUPPORTED=true
-    fi
-
-  - nvm install 4
-  - nvm use 4
+  - nvm install 6.10.2
   # Remove Ruby directive from Gemfile as this image has 2.2.5
   - sed -i '/^ruby/d' Gemfile
-  - mkdir -p ~/.apt-cache
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.apt.sh; fi
   - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.sh; fi
-  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.shellcheck.sh; fi
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.cabal.sh; fi
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.r.sh; fi
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.opam.sh; fi
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.java.sh; fi
   # https://github.com/coala/coala/issues/3183
   - cp requirements.txt requirements.orig
-  - cat test-requirements.txt docs-requirements.txt bear-requirements.txt >> requirements.txt
+  - >
+    cat test-requirements.txt docs-requirements.txt
+    bear-requirements.txt >> requirements.txt
   - sed -i '/^-r/d' requirements.txt
   # On unsupported versions, coala will be installed in the `script` block
+  # mypy-lang does not install, and 3to2 must be pre-installed
+  # https://bitbucket.org/spirit/guess_language/issues/18
   - >
     if [[ "$UNSUPPORTED" == true ]]; then
-      sed -e '/^coala/d' requirements.txt > requirements.new
-      mv requirements.new requirements.txt
+      pip install 3to2
+      export PIP_NO_COMPILE=1
+      sed -i.bak '/^coala/d' requirements.txt
+      sed -i.bak '/^mypy-lang/d' requirements.txt bear-requirements.txt
     fi
 
 before_script:
   - mv requirements.orig requirements.txt
-  # nltk 3.2.2 dropped support for Python 3.3
-  - >
-    if [[ "$TRAVIS_PYTHON_VERSION" != "3.3" ]]; then
-      python -m nltk.downloader punkt maxent_treebank_pos_tagger averaged_perceptron_tagger
-    fi
+  - if [[ "$UNSUPPORTED" != true ]]; then bash .ci/deps.coala-bears.sh; fi
 
 script:
   - >
     if [[ "$UNSUPPORTED" == true ]]; then
       set -e
-      python setup.py install | tee setup.err
+      python setup.py install --no-compile | tee setup.err
       grep -q 'coala supports only python 3.4 or later' setup.err
       if grep -q 'Traceback (most recent call last)' setup.err; then
         false
@@ -118,7 +124,7 @@ script:
   - bash .ci/tests.sh
   # Ensure bear requirements are in sync with the bear PipRequirement
   - .ci/generate_bear_requirements.py
-  - git diff --exit-code bear-requirements.txt
+  - git diff --exit-code bear-requirements.txt Gemfile package.json
   # https://github.com/coala/coala-bears/issues/1037
   - >
     if [[ "$TRAVIS_PULL_REQUEST" != "false" ]]; then
@@ -126,9 +132,12 @@ script:
       mv .coafile.new .coafile
     fi
   - coala --non-interactive
-  - bash .ci/deploy.coverage.sh
-  - rm -rf docs/API && make -C docs clean
+  - codecov
   - python setup.py docs
 
 notifications:
   email: false
+
+branches:
+  exclude:
+    - /^sils\//

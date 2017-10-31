@@ -17,7 +17,7 @@ class IndentationBear(LocalBear):
     AUTHORS_EMAILS = {'coala-devel@googlegroups.com'}
     LICENSE = 'AGPL-3.0'
     CAN_FIX = {'Formatting'}
-    BEAR_DEPS = {AnnotationBear}  # pragma: no cover
+    BEAR_DEPS = {AnnotationBear}
 
     @deprecate_settings(indent_size='tab_width')
     def run(self,
@@ -257,7 +257,7 @@ class IndentationBear(LocalBear):
                                 has ended.
         :param annotation_dict: A dictionary containing sourceranges of all the
                                 strings and comments within a file.
-        :return:                A tuple whith the first source range being
+        :return:                A tuple with the first source range being
                                 the range of the outermost indentation while
                                 last being the range of the most
                                 nested/innermost indentation.

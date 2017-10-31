@@ -1,9 +1,10 @@
 source 'https://rubygems.org'
 ruby '2.2.2'
 
-gem "rubocop"
-gem "sqlint"
-gem 'scss_lint', require: false# require flag is necessary https://github.com/brigade/scss-lint#installation
-gem "reek"
-gem "puppet-lint"
 gem "csvlint"
+gem "puppet-lint", "2.1.1"
+gem "reek"
+gem "rubocop", "0.49.1"
+gem "scss_lint", require: false
+gem "sqlint"
+gem "travis", "1.8.8"

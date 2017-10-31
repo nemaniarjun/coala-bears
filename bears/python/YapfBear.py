@@ -10,14 +10,9 @@ from coalib.results.Diff import Diff
 
 
 class YapfBear(LocalBear):
-    """
-    Check and correct formatting of Python code using ``yapf`` utility.
-
-    See <https://github.com/google/yapf> for more information.
-    """
     LANGUAGES = {'Python', 'Python 2', 'Python 3'}
     AUTHORS = {'The coala developers'}
-    REQUIREMENTS = {PipRequirement('yapf', '0.14.0')}
+    REQUIREMENTS = {PipRequirement('yapf', '0.16.0')}
     AUTHORS_EMAILS = {'coala-devel@googlegroups.com'}
     LICENSE = 'AGPL-3.0'
     CAN_FIX = {'Formatting'}
@@ -46,6 +41,10 @@ class YapfBear(LocalBear):
             based_on_style: str='pep8',
             prefer_line_break_after_opening_bracket: bool=True):
         """
+        Check and correct formatting of Python code using ``yapf`` utility.
+
+        See <https://github.com/google/yapf> for more information.
+
         :param max_line_length:
             Maximum number of characters for a line.
         :param indent_size:
@@ -68,23 +67,22 @@ class YapfBear(LocalBear):
             Prevents splitting consecutive brackets. Only relevant when
             ``dedent_closing_brackets`` is set.
             Example:
-            If ``True``,
+            If ``True``::
 
-            ```
-            call_func_that_takes_a_dict(
-                {
+                call_func_that_takes_a_dict(
+                    {
+                        'key1': 'value1',
+                        'key2': 'value2',
+                    }
+                )
+
+            would reformat to::
+
+                call_func_that_takes_a_dict({
                     'key1': 'value1',
                     'key2': 'value2',
-                }
-            )
-            ```
-            would reformat to:
-            ```
-            call_func_that_takes_a_dict({
-                'key1': 'value1',
-                'key2': 'value2',
-            })
-            ```
+                })
+
         :param join_multiple_lines:
             Joins short lines into one line.
         :param spaces_around_power_operator:

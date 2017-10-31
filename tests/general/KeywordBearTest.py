@@ -1,6 +1,7 @@
 from collections import namedtuple
 from queue import Queue
 import unittest
+import logging
 
 from bears.general.KeywordBear import KeywordBear
 from coalib.results.HiddenResult import HiddenResult
@@ -21,7 +22,8 @@ KeywordBearTest = verify_local_bear(
     valid_files=(test_file,),
     invalid_files=('test line todo',
                    'test line warNING'),
-    settings={'keywords': 'todo, warning'})
+    settings={'keywords': 'todo, warning',
+              'language': 'c'})
 
 
 class KeywordBearDiffTest(unittest.TestCase):
@@ -39,7 +41,7 @@ class KeywordBearDiffTest(unittest.TestCase):
     def test_empty_keyword(self):
         text = ['a == b']
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=self.dep_results) as result:
             self.assertEqual(result, [])
 
@@ -48,7 +50,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             'AnnotationBear': {}
         }
         text = ['# todo 123']
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs, {})
             self.assertEqual(result[0].affected_code[0].start.line, 1)
@@ -56,7 +58,7 @@ class KeywordBearDiffTest(unittest.TestCase):
 
         dep_results = {'AnnotationBear': HiddenResult(
             'AnnotationBear', {'comments': 123})}
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs, {})
             self.assertEqual(result[0].affected_code[0].start.line, 1)
@@ -64,7 +66,7 @@ class KeywordBearDiffTest(unittest.TestCase):
 
         dep_results = {'AnnotationBear': HiddenResult(
             'AnnotationBear', 123)}
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs, {})
             self.assertEqual(result[0].affected_code[0].start.line, 1)
@@ -79,7 +81,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             ]
         }
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(len(result[0].diffs), 0)
 
@@ -92,7 +94,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             ]
         }
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs['F'].unified_diff,
                              '--- \n'
@@ -107,7 +109,7 @@ class KeywordBearDiffTest(unittest.TestCase):
                 self.annotation_bear_result_type({'comments': comments})
             ]
         }
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs['F'].unified_diff,
                              '--- \n'
@@ -118,9 +120,9 @@ class KeywordBearDiffTest(unittest.TestCase):
 
     def test_keyword_outside_of_comment(self):
         text = ['todo = 123\n']
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=self.dep_results) as result:
-            self.assertEquals(result[0].diffs, {})
+            self.assertEqual(result[0].diffs, {})
 
     def test_keyword_between_code(self):
         self.section.append(Setting('language', 'c'))
@@ -135,7 +137,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             ]
         }
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs['F'].unified_diff,
                              '--- \n'
@@ -154,7 +156,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             ]
         }
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs['F'].unified_diff,
                              '--- \n'
@@ -175,7 +177,7 @@ class KeywordBearDiffTest(unittest.TestCase):
             ]
         }
 
-        with execute_bear(self.uut, 'F', text,
+        with execute_bear(self.uut, filename='F', file=text,
                           dependency_results=dep_results) as result:
             self.assertEqual(result[0].diffs['F'].unified_diff,
                              '--- \n'
@@ -214,3 +216,36 @@ class KeywordBearDiffTest(unittest.TestCase):
             self.assertEqual(result[0].message, 'The line contains the keyword'
                                                 " 'Issue #123' which resulted "
                                                 'in a match with given regex.')
+
+    def test_wrong_language(self):
+        self.section.append(Setting('language', 'anything'))
+        logger = logging.getLogger()
+        annotation_bear_result_type = namedtuple('result', 'contents')
+        dep_results = {
+            'AnnotationBear': [
+                annotation_bear_result_type(
+                  'coalang specification for anything not found.')
+            ]
+        }
+
+        text = ['# todo 123']
+
+        with self.assertLogs(logger, 'ERROR') as log:
+            with execute_bear(self.uut, filename='F', file=text,
+                              dependency_results=dep_results) as result:
+                self.assertEqual(len(result), 1)
+                self.assertEqual(result[0].diffs, {})
+                self.assertEqual(result[0].affected_code[0].start.line, 1)
+                self.assertEqual(len(log.output), 1)
+                self.assertIn(log.output[0],
+                              'ERROR:root:coalang specification'
+                              ' for anything not found.')
+
+    def test_empty_keywords_list(self):
+        self.section.append(Setting('keywords', ''))
+
+        text = ['bears = KeywordBear\n']
+
+        with execute_bear(self.uut, filename='F', file=text,
+                          dependency_results=self.dep_results) as result:
+            self.assertEqual(len(result), 0)

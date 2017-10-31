@@ -1,4 +1,10 @@
 from coalib.bearlib.abstractions.Linter import linter
+from dependency_management.requirements.DistributionRequirement import (
+    DistributionRequirement)
+from dependency_management.requirements.AnyOneOfRequirements import (
+    AnyOneOfRequirements)
+from dependency_management.requirements.CabalRequirement import (
+     CabalRequirement)
 
 
 @linter(executable='shellcheck', output_format='regex',
@@ -14,14 +20,26 @@ class ShellCheckBear:
     """
 
     LANGUAGES = {'sh', 'bash', 'ksh', 'dash'}
+    REQUIREMENTS = {AnyOneOfRequirements(
+            [CabalRequirement('shellcheck', '0.4.1'),
+             DistributionRequirement('shellcheck')
+             ]
+        ),
+    }
     AUTHORS = {'The coala developers'}
     AUTHORS_EMAILS = {'coala-devel@googlegroups.com'}
     LICENSE = 'AGPL-3.0'
     CAN_DETECT = {'Syntax', 'Security', 'Undefined Element', 'Unused Code'}
 
     @staticmethod
-    def create_arguments(filename, file, config_file, shell: str='sh'):
+    def create_arguments(filename, file, config_file, shell: str='sh',
+                         shellcheck_ignore: list=None):
         """
         :param shell: Target shell being used.
+        :param shellcheck_ignore: List of linting rules that should be ignored.
         """
-        return '--f', 'gcc', '-s', shell, filename
+        args = ('--f', 'gcc', '-s', shell, filename)
+        if shellcheck_ignore:
+            args += ('-e', ','.join(shellcheck_ignore))
+
+        return args
